@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment — never copy this into the image
+# The Dockerfile creates its own venv inside the container
+venv/
+env/
+.venv/
+
+# Environment files — secrets must NOT be baked into the image
+# They are injected at runtime via docker-compose env_file or environment
+.env
+.env.*
+
+# Tests — not needed in production image
+test_*.py
+
+# Git
+.git/
+.gitignore
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Logs
+*.log
+logs/
