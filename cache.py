@@ -7,7 +7,12 @@ load_dotenv()
  
 # ── Connection ─────────────────────────────────────────────────────────────────
  
-_client: redis.Redis | None = None
+_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    password=os.getenv("REDIS_PASSWORD", None),
+    decode_responses=True,
+)
  
  
 def get_redis() -> redis.Redis:
