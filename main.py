@@ -158,7 +158,7 @@ def analytics(
 def shorten(
     req: ShortenRequest,
     request: Request,
-    current_user: dict = Depends(auth.get_current_user),
+    current_user: Optional[dict] = Depends(auth.get_optional_user),  # ← optional
 ):
     ratelimit.check_rate_limit(request, user=current_user, endpoint="shorten")
 
@@ -177,10 +177,12 @@ def shorten(
                 VALUES (%s, %s, %s, %s) RETURNING id, slug
             """, (req.custom_slug, str(req.url), current_user["user_id"], req.expires_at))
         else:
+            user_id = current_user["user_id"] if current_user else None
             cur.execute("""
                 INSERT INTO urls (slug, original_url, user_id, expires_at)
-                VALUES ('__placeholder__', %s, %s, %s) RETURNING id
-            """, (str(req.url), current_user["user_id"], req.expires_at))
+                VALUES ('__placeholder__', %s, %s, %s)
+                RETURNING id
+            """, (str(req.url), user_id, req.expires_at))
 
             row_id = cur.fetchone()[0]
             real_slug = slug_utils.base62_encode(row_id)
