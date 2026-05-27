@@ -59,27 +59,25 @@ def get_identifier(request: Request, user: dict = None) -> str:
 
 
 def check_rate_limit(request: Request, user: dict = None, endpoint: str = "default"):
-    identifier = get_identifier(request, user)
-    limit = LIMITS.get(endpoint, LIMITS["default"])
-
-    result = is_rate_limited(identifier, limit)
-
-    if not result["allowed"]:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "Rate limit exceeded",
-                "limit": result["limit"],
-                "window_seconds": WINDOW_SECONDS,
-                "retry_after_seconds": result["retry_after"],
-                "message": f"Max {result['limit']} requests per {WINDOW_SECONDS}s. "
-                           f"Try again in {result['retry_after']}s."
-            },
-            headers={
-                "Retry-After": str(result["retry_after"]),
-                "X-RateLimit-Limit": str(result["limit"]),
-                "X-RateLimit-Remaining": "0",
-                "X-RateLimit-Reset": str(int(time.time()) + result["retry_after"]),
-            }
-        )
-    return result
+    try:
+        identifier = get_identifier(request, user)
+        limit = LIMITS.get(endpoint, LIMITS["default"])
+        result = is_rate_limited(identifier, limit)
+        if not result["allowed"]:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "Rate limit exceeded",
+                    "limit": result["limit"],
+                    "retry_after_seconds": result["retry_after"],
+                    "message": f"Max {result['limit']} requests per {WINDOW_SECONDS}s."
+                }
+            )
+        return result
+    except HTTPException:
+        raise  # re-raise 429s
+    except Exception as e:
+        # Redis down — skip rate limiting, don't crash the request
+        import logging
+        logging.warning(f"Rate limiting skipped — Redis error: {e}")
+        return {"allowed": True, "count": 0, "limit": 0, "remaining": 999}
