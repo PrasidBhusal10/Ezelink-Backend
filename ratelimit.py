@@ -10,39 +10,43 @@ LIMITS = {
     "default":  30,   # everything else
 }
 def is_rate_limited(identifier: str, limit: int, window: int = WINDOW_SECONDS) -> dict:
-    r = cache.get_redis()
-    now = time.time()
-    window_start = now - window
-    key = f"ratelimit:{identifier}"
-    pipe = r.pipeline()
-    pipe.zremrangebyscore(key, 0, window_start)
-    pipe.zcard(key)
-    pipe.zadd(key, {str(now): now})
-    pipe.expire(key, window)
+    try:
+        r = cache.get_redis()
+        now = time.time()
+        window_start = now - window
+        key = f"ratelimit:{identifier}"
 
-    results = pipe.execute()
-    current_count = results[1]   
+        pipe = r.pipeline()
+        pipe.zremrangebyscore(key, 0, window_start)
+        pipe.zcard(key)
+        pipe.zadd(key, {str(now): now})
+        pipe.expire(key, window)
+        results = pipe.execute()
+        current_count = results[1]
 
-    if current_count >= limit:
-        oldest = r.zrange(key, 0, 0, withscores=True)
-        retry_after = int(oldest[0][1] + window - now) + 1 if oldest else window
+        if current_count >= limit:
+            oldest = r.zrange(key, 0, 0, withscores=True)
+            retry_after = int(oldest[0][1] + window - now) + 1 if oldest else window
+            return {
+                "allowed": False,
+                "count": current_count,
+                "limit": limit,
+                "remaining": 0,
+                "retry_after": retry_after,
+            }
 
         return {
-            "allowed": False,
-            "count": current_count,
+            "allowed": True,
+            "count": current_count + 1,
             "limit": limit,
-            "remaining": 0,
-            "retry_after": retry_after,
+            "remaining": limit - current_count - 1,
+            "retry_after": 0,
         }
-
-    return {
-        "allowed": True,
-        "count": current_count + 1,
-        "limit": limit,
-        "remaining": limit - current_count - 1,
-        "retry_after": 0,
-    }
-
+    except Exception as e:
+        # Redis timeout or error — skip rate limiting, allow request
+        import logging
+        logging.warning(f"Rate limiting skipped: {e}")
+        return {"allowed": True, "count": 0, "limit": limit, "remaining": limit, "retry_after": 0}
 
 def get_identifier(request: Request, user: dict = None) -> str:
     if user:
