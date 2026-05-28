@@ -63,25 +63,6 @@ def get_identifier(request: Request, user: dict = None) -> str:
 
 
 def check_rate_limit(request: Request, user: dict = None, endpoint: str = "default"):
-    try:
-        identifier = get_identifier(request, user)
-        limit = LIMITS.get(endpoint, LIMITS["default"])
-        result = is_rate_limited(identifier, limit)
-        if not result["allowed"]:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "Rate limit exceeded",
-                    "limit": result["limit"],
-                    "retry_after_seconds": result["retry_after"],
-                    "message": f"Max {result['limit']} requests per {WINDOW_SECONDS}s."
-                }
-            )
-        return result
-    except HTTPException:
-        raise  # re-raise 429s
-    except Exception as e:
-        # Redis down — skip rate limiting, don't crash the request
-        import logging
-        logging.warning(f"Rate limiting skipped — Redis error: {e}")
-        return {"allowed": True, "count": 0, "limit": 0, "remaining": 999}
+    # Temporarily disabled — Redis connection issues on Railway
+    # TODO: re-enable when Redis is stable
+    return {"allowed": True, "count": 0, "limit": 100, "remaining": 100, "retry_after": 0}

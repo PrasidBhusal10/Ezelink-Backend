@@ -1,21 +1,18 @@
-
 import os
 import redis
 from dotenv import load_dotenv
- 
+
 load_dotenv()
- 
-# ── Connection ─────────────────────────────────────────────────────────────────
- 
-_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    password=os.getenv("REDIS_PASSWORD", None),
-    decode_responses=True,
-)
- 
- 
+
+_client = None
+
+DEFAULT_TTL  = 3600
+POPULAR_TTL  = 86400
+NEGATIVE_TTL = 60
+
+
 def get_redis() -> redis.Redis:
+    # ← KEEP THIS EXACTLY AS IT IS
     global _client
     if _client is None:
         redis_url = os.getenv("REDIS_URL")
@@ -36,49 +33,39 @@ def get_redis() -> redis.Redis:
                 socket_connect_timeout=5,
             )
     return _client
-DEFAULT_TTL = 3600          # 1 hour — most slugs
-POPULAR_TTL = 86400         # 24 hours — could use for high-traffic slugs
-NEGATIVE_TTL = 60           # 1 min — cache "not found" to block DB hammering
- 
- 
-# ── Cache operations ───────────────────────────────────────────────────────────
- 
+
+
 def get_url(slug: str) -> str | None:
-    r = get_redis()
     try:
+        r = get_redis()
         return r.get(f"slug:{slug}")
-    except redis.RedisError:
-        return None
- 
- 
+    except Exception:
+        return None  # cache miss — fall through to DB
+
 def set_url(slug: str, original_url: str, ttl: int = DEFAULT_TTL) -> None:
-    r = get_redis()
     try:
+        r = get_redis()
         r.set(f"slug:{slug}", original_url, ex=ttl)
-    except redis.RedisError:
-        pass  # Cache write failure is non-fatal
- 
- 
+    except Exception:
+        pass
+
 def set_not_found(slug: str) -> None:
-    r = get_redis()
     try:
+        r = get_redis()
         r.set(f"slug:{slug}", "__not_found__", ex=NEGATIVE_TTL)
-    except redis.RedisError:
+    except Exception:
         pass
- 
- 
+
 def evict(slug: str) -> None:
-    r = get_redis()
     try:
+        r = get_redis()
         r.delete(f"slug:{slug}")
-    except redis.RedisError:
+    except Exception:
         pass
- 
- 
+
 def get_stats() -> dict:
- 
-    r = get_redis()
     try:
+        r = get_redis()
         info = r.info("stats")
         memory = r.info("memory")
         return {
@@ -89,10 +76,9 @@ def get_stats() -> dict:
             "used_memory_human": memory.get("used_memory_human"),
             "evicted_keys":      info.get("evicted_keys", 0),
         }
-    except redis.RedisError as e:
+    except Exception as e:
         return {"error": str(e)}
- 
- 
+
 def _hit_rate(info: dict) -> str:
     hits   = info.get("keyspace_hits", 0)
     misses = info.get("keyspace_misses", 0)
