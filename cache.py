@@ -18,11 +18,23 @@ _client = redis.Redis(
 def get_redis() -> redis.Redis:
     global _client
     if _client is None:
-        _client = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", 6379)),
-            decode_responses=True,   # return str, not bytes
-        )
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            _client = redis.Redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+            )
+        else:
+            _client = redis.Redis(
+                host=os.getenv("REDIS_HOST", "localhost"),
+                port=int(os.getenv("REDIS_PORT", 6379)),
+                password=os.getenv("REDIS_PASSWORD", None),
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5,
+            )
     return _client
 DEFAULT_TTL = 3600          # 1 hour — most slugs
 POPULAR_TTL = 86400         # 24 hours — could use for high-traffic slugs
